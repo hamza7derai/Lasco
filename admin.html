@@ -1050,11 +1050,28 @@
             document.getElementById('pCat').innerHTML = '<option value="">Select category</option>' + filteredCats.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
             if(currentSelected && filteredCats.find(c => c.name === currentSelected)) { document.getElementById('pCat').value = currentSelected; } 
             else { document.getElementById('pCat').value = ''; }
+            loadSubCats(); // Ensure subcategories load when main category loads
         }
+
+        window.loadSubCats = () => {
+            const main = document.getElementById('pCat').value; 
+            const subEl = document.getElementById('pSubCat'); 
+            const catDoc = globalCategoriesData.find(c => c.name === main);
+            if(catDoc && catDoc.subcategories && catDoc.subcategories.length > 0) { 
+                subEl.innerHTML = '<option value="">Select subcategory</option>' + catDoc.subcategories.map(s => `<option value="${s}">${s}</option>`).join(''); 
+            } 
+            else { subEl.innerHTML = '<option value="">No subcategories</option>'; }
+        };
 
         window.openAddCategoryModal = (type) => {
             currentCatAddingType = type;
-            document.getElementById('catModalTitle').innerText = `New ${selectedProductType} Category`; 
+            if(type === 'main') { 
+                document.getElementById('catModalTitle').innerText = `New ${selectedProductType} Category`; 
+            } else { 
+                const mainCat = document.getElementById('pCat').value; 
+                if(!mainCat) return showToast("Select a main category first."); 
+                document.getElementById('catModalTitle').innerText = `New Subcategory for '${mainCat}'`; 
+            }
             document.getElementById('newCatInput').value = ''; 
             document.getElementById('addCatOverlay').classList.add('active'); 
             document.getElementById('addCatModal').classList.add('active');
@@ -1073,10 +1090,25 @@
             const val = document.getElementById('newCatInput').value.trim(); if(!val) return;
             const btn = document.getElementById('btnSaveCategory'); btn.innerText = '...'; btn.disabled = true;
             try {
-                if(!globalCategoriesData.find(c => c.name.toLowerCase() === val.toLowerCase())) {
-                    await addDoc(collection(db, "categories"), { name: val, subcategories: [], type: selectedProductType, sortWeight: 0 }); 
-                    showToast("Category created!");
-                } else { showToast("Category already exists!"); }
+                if(currentCatAddingType === 'main') {
+                    if(!globalCategoriesData.find(c => c.name.toLowerCase() === val.toLowerCase())) {
+                        await addDoc(collection(db, "categories"), { name: val, subcategories: [], type: selectedProductType, sortWeight: 0 }); 
+                        showToast("Category created!");
+                    } else { showToast("Category already exists!"); }
+                } else {
+                    const mainCatName = document.getElementById('pCat').value; 
+                    const catDoc = globalCategoriesData.find(c => c.name === mainCatName);
+                    if(catDoc) {
+                        let subs = catDoc.subcategories || [];
+                        if(!subs.includes(val)) { 
+                            subs.push(val); 
+                            await updateDoc(doc(db, "categories", catDoc.id), { subcategories: subs }); 
+                            showToast("Subcategory added!"); 
+                            document.getElementById('pSubCat').innerHTML += `<option value="${val}">${val}</option>`;
+                            document.getElementById('pSubCat').value = val;
+                        } else { showToast("Subcategory already exists!"); }
+                    }
+                }
                 closeModals();
             } catch (e) { console.error(e); showToast("Error connecting."); } finally { btn.innerText = 'Add'; btn.disabled = false; }
         });
