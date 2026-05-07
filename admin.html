@@ -105,6 +105,11 @@
         .tab-pill { padding: 8px 16px; border-radius: 50px; font-size: 13px; font-weight: 600; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); white-space: nowrap; cursor: pointer; transition: 0.2s; scroll-snap-align: center;}
         .tab-pill.active { background: var(--primary); color: white; border-color: var(--primary); }
 
+        /* CATALOG TOGGLE & ACCORDIONS */
+        .cat-toggle-wrapper { background: var(--surface); border-radius: 50px; padding: 4px; display: flex; box-shadow: var(--shadow-sm); border: 1px solid var(--border); margin-bottom: 20px;}
+        .cat-toggle-btn { flex: 1; padding: 10px; font-size: 13px; font-weight: 700; color: var(--text-muted); border-radius: 50px; transition: 0.3s; text-align: center; display: flex; justify-content: center; align-items: center; gap: 6px; cursor: pointer;}
+        .cat-toggle-btn.active { background: var(--primary); color: white; }
+
         /* HORIZONTAL LIST CATALOG */
         .catalog-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px;}
         .cat-list-item { display: flex; flex-direction: column; padding: 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,0.02);}
@@ -206,6 +211,12 @@
         .trait-item { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); transition: 0.2s; }
         .trait-item:hover { border-color: var(--primary); }
         .trait-item input { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;}
+
+        .toggle-card-config { background: var(--surface); border-radius: 16px; border: 1px solid var(--border); padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow-sm); }
+        .config-panel { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border); animation: fadeIn 0.3s ease; }
+        .list-row { display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-btn); margin-bottom: 8px; background: var(--bg-main);}
+        .list-info h5 { font-size: 14px; font-weight: 700; color: var(--text-main); }
+        .list-info p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
         /* ORDER DETAILS */
         .detail-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
@@ -327,6 +338,7 @@
                 <div id="zoneListContainer" style="display:flex; flex-direction:column; gap:8px;"></div>
             </div>
         </div>
+
     </div>
 
     <div id="view-commandes" class="app-view container">
@@ -391,8 +403,24 @@
             <input type="text" id="catSearch" class="form-control" placeholder="Search catalog..." style="padding-left: 44px; font-size: 13px;" oninput="renderCatalog()">
         </div>
 
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+            <span style="font-size:13px; font-weight:800; color:var(--text-main);">Categories</span>
+            <span style="font-size:12px; font-weight:700; color:var(--primary); cursor:pointer; display:flex; align-items:center; gap:4px;" onclick="openCatManager()">
+                <svg viewBox="0 0 24 24" style="width:14px;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                Manage
+            </span>
+        </div>
+
         <div class="tabs-scroll" id="catalogCategoryTabs"></div>
         <div id="adminProductListContainer"></div>
+    </div>
+
+    <div class="overlay" id="catManagerOverlay" onclick="if(event.target===this) closeModals()"></div>
+    <div class="bottom-sheet" id="catManagerModal" style="max-height: 80vh; overflow-y:auto;">
+        <div class="sheet-handle"></div>
+        <h2 style="font-size: 18px; font-weight:800; margin-bottom:4px;">Manage Categories</h2>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:20px; line-height:1.4;">Set weights to control tab order (higher = first), or rename categories across all items instantly.</p>
+        <div id="catManagerList" style="display:flex; flex-direction:column; gap:12px;"></div>
     </div>
 
     <div id="view-ajouter" class="app-view container" style="background: var(--surface); min-height: 100vh;">
@@ -413,7 +441,9 @@
         </div>
 
         <div class="wizard-box">
+            
             <div id="wizard-1" class="wizard-step active">
+                
                 <div class="form-group">
                     <label>Photo *</label>
                     <div class="photo-grid" id="uploadBoxUI">
@@ -671,8 +701,9 @@
     </div>
 
     <script type="module">
+        // IMPORT BATCH OPERATIONS
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, setDoc, writeBatch, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const firebaseConfig = {
@@ -829,6 +860,89 @@
             }
         };
 
+        // ---------------- CATEGORY MANAGER LOGIC (NEW) ----------------
+        window.openCatManager = () => {
+            renderCatManagerList();
+            document.getElementById('catManagerOverlay').classList.add('active');
+            document.getElementById('catManagerModal').classList.add('active');
+        };
+
+        window.renderCatManagerList = () => {
+            const activeCats = globalCategoriesData.filter(c => c.type === currentCatalogMode || !c.type);
+            activeCats.sort((a,b) => (b.sortWeight || 0) - (a.sortWeight || 0) || a.name.localeCompare(b.name));
+            
+            let html = '';
+            if(activeCats.length === 0) {
+                html = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">No categories found for this mode.</div>`;
+            } else {
+                activeCats.forEach(c => {
+                    html += `
+                    <div style="display:flex; gap:8px; align-items:center; background:var(--bg-main); padding:10px; border-radius:12px; border:1px solid var(--border);">
+                        <input type="text" id="catName_${c.id}" class="form-control" style="padding:8px; font-size:13px; font-weight:700;" value="${c.name}">
+                        <input type="number" id="catWeight_${c.id}" class="form-control" style="width:70px; padding:8px; font-size:13px; text-align:center;" placeholder="Wgt" value="${c.sortWeight || 0}">
+                        <button class="btn-action edit" onclick="saveCategoryChanges('${c.id}', '${c.name.replace(/'/g, "\\'")}')"><svg viewBox="0 0 24 24" style="width:16px;"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                        <button class="btn-action del" onclick="deleteCategoryDb('${c.id}')"><svg viewBox="0 0 24 24" style="width:16px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                    </div>`;
+                });
+            }
+            document.getElementById('catManagerList').innerHTML = html;
+        };
+
+        window.saveCategoryChanges = async (id, oldName) => {
+            const newNameInput = document.getElementById(`catName_${id}`);
+            const newWeightInput = document.getElementById(`catWeight_${id}`);
+            
+            const newName = newNameInput.value.trim();
+            const newWeight = parseInt(newWeightInput.value) || 0;
+            
+            if(!newName) return showToast("Category name cannot be empty");
+            
+            try {
+                // 1. Update Category Document
+                await updateDoc(doc(db, "categories", id), {
+                    name: newName,
+                    sortWeight: newWeight
+                });
+                
+                // 2. Cascade rename to all products if the name was changed
+                if(newName !== oldName) {
+                    const q = query(collection(db, "products"), where("category", "==", oldName));
+                    const snap = await getDocs(q);
+                    const batch = writeBatch(db);
+                    let count = 0;
+                    snap.forEach(d => {
+                        batch.update(d.ref, { category: newName });
+                        count++;
+                    });
+                    if(count > 0) {
+                        await batch.commit();
+                        showToast(`Updated category and moved ${count} items!`);
+                    } else {
+                        showToast("Category updated!");
+                    }
+                } else {
+                    showToast("Category weight updated!");
+                }
+                
+                renderCatManagerList(); // Refresh list to reflect changes
+            } catch(e) { 
+                console.error(e); 
+                showToast("Error updating category"); 
+            }
+        };
+
+        window.deleteCategoryDb = async (id) => {
+            if(confirm("Delete this category? Items inside it will remain in your database but may lose their grouping tab.")) {
+                try {
+                    await deleteDoc(doc(db, "categories", id));
+                    showToast("Category deleted");
+                    renderCatManagerList();
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+        };
+
         // ---------------- WIZARD LOGIC ----------------
         window.selectProductType = (type) => {
             selectedProductType = type;
@@ -936,44 +1050,33 @@
             document.getElementById('pCat').innerHTML = '<option value="">Select category</option>' + filteredCats.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
             if(currentSelected && filteredCats.find(c => c.name === currentSelected)) { document.getElementById('pCat').value = currentSelected; } 
             else { document.getElementById('pCat').value = ''; }
-            loadSubCats();
         }
-
-        window.loadSubCats = () => {
-            const main = document.getElementById('pCat').value; const subEl = document.getElementById('pSubCat'); const catDoc = globalCategoriesData.find(c => c.name === main);
-            if(catDoc && catDoc.subcategories && catDoc.subcategories.length > 0) { subEl.innerHTML = '<option value="">Select subcategory</option>' + catDoc.subcategories.map(s => `<option value="${s}">${s}</option>`).join(''); } 
-            else { subEl.innerHTML = '<option value="">No subcategories</option>'; }
-        };
 
         window.openAddCategoryModal = (type) => {
             currentCatAddingType = type;
-            if(type === 'main') { document.getElementById('catModalTitle').innerText = `New ${selectedProductType} Category`; } 
-            else { const mainCat = document.getElementById('pCat').value; if(!mainCat) return showToast("Select a main category first."); document.getElementById('catModalTitle').innerText = `New Subcategory for '${mainCat}'`; }
-            document.getElementById('newCatInput').value = ''; document.getElementById('addCatOverlay').classList.add('active'); document.getElementById('addCatModal').classList.add('active');
+            document.getElementById('catModalTitle').innerText = `New ${selectedProductType} Category`; 
+            document.getElementById('newCatInput').value = ''; 
+            document.getElementById('addCatOverlay').classList.add('active'); 
+            document.getElementById('addCatModal').classList.add('active');
             setTimeout(() => document.getElementById('newCatInput').focus(), 100);
         };
 
-        window.closeModals = () => { document.getElementById('confirmOverlay').classList.remove('active'); document.getElementById('addCatOverlay').classList.remove('active'); document.getElementById('addCatModal').classList.remove('active'); };
+        window.closeModals = () => { 
+            document.getElementById('confirmOverlay').classList.remove('active'); 
+            document.getElementById('addCatOverlay').classList.remove('active'); 
+            document.getElementById('addCatModal').classList.remove('active'); 
+            document.getElementById('catManagerOverlay').classList.remove('active');
+            document.getElementById('catManagerModal').classList.remove('active');
+        };
 
         document.getElementById('btnSaveCategory').addEventListener('click', async () => {
             const val = document.getElementById('newCatInput').value.trim(); if(!val) return;
             const btn = document.getElementById('btnSaveCategory'); btn.innerText = '...'; btn.disabled = true;
             try {
-                if(currentCatAddingType === 'main') {
-                    if(!globalCategoriesData.find(c => c.name.toLowerCase() === val.toLowerCase())) {
-                        await addDoc(collection(db, "categories"), { name: val, subcategories: [], type: selectedProductType }); 
-                        showToast("Category created!");
-                    } else { showToast("Category already exists!"); }
-                } else {
-                    const mainCatName = document.getElementById('pCat').value; const catDoc = globalCategoriesData.find(c => c.name === mainCatName);
-                    if(catDoc) {
-                        let subs = catDoc.subcategories || [];
-                        if(!subs.includes(val)) { 
-                            subs.push(val); await updateDoc(doc(db, "categories", catDoc.id), { subcategories: subs }); showToast("Subcategory added!"); 
-                            document.getElementById('pSubCat').value = val;
-                        } else { showToast("Subcategory already exists!"); }
-                    }
-                }
+                if(!globalCategoriesData.find(c => c.name.toLowerCase() === val.toLowerCase())) {
+                    await addDoc(collection(db, "categories"), { name: val, subcategories: [], type: selectedProductType, sortWeight: 0 }); 
+                    showToast("Category created!");
+                } else { showToast("Category already exists!"); }
                 closeModals();
             } catch (e) { console.error(e); showToast("Error connecting."); } finally { btn.innerText = 'Add'; btn.disabled = false; }
         });
@@ -1017,13 +1120,14 @@
             const container = document.getElementById('catalogCategoryTabs');
             if(!container) return;
             
-            const modeProducts = allProducts.filter(p => p.productType === currentCatalogMode);
-            const uniqueCats = [...new Set(modeProducts.map(p => p.category || "Uncategorized"))].sort();
+            // We use globalCategoriesData so we respect the new sortWeight logic for Tabs!
+            const activeCats = globalCategoriesData.filter(c => c.type === currentCatalogMode || !c.type);
+            activeCats.sort((a,b) => (b.sortWeight || 0) - (a.sortWeight || 0) || a.name.localeCompare(b.name));
             
             let html = `<div class="tab-pill ${currentCatalogCategory === 'All' ? 'active' : ''}" onclick="filterCatalog('All', this)">All</div>`;
-            uniqueCats.forEach(cat => {
-                const isActive = currentCatalogCategory === cat ? 'active' : '';
-                html += `<div class="tab-pill ${isActive}" onclick="filterCatalog('${cat}', this)">${cat}</div>`;
+            activeCats.forEach(cat => {
+                const isActive = currentCatalogCategory === cat.name ? 'active' : '';
+                html += `<div class="tab-pill ${isActive}" onclick="filterCatalog('${cat.name}', this)">${cat.name}</div>`;
             });
             container.innerHTML = html;
         }
@@ -1108,6 +1212,7 @@
             globalCategoriesData = snap.docs.map(d => ({id: d.id, ...d.data()})); 
             globalCategoriesData.sort((a,b) => a.name.localeCompare(b.name));
             if(document.getElementById('view-ajouter').classList.contains('active')) { loadMainCats(); }
+            if(document.getElementById('view-produits').classList.contains('active')) { renderCatalogTabs(); }
         });
 
         onSnapshot(collection(db, "products"), snap => {
@@ -1189,7 +1294,6 @@
                                 if(catalogProduct) {
                                     itemCost = safeNum(catalogProduct.costPrice);
                                     
-                                    // Old format calculation (keep for legacy orders)
                                     if(item.variantName && catalogProduct.sizes) {
                                         const variant = catalogProduct.sizes.find(s => s.name === item.variantName);
                                         if(variant && variant.costPrice) itemCost = safeNum(variant.costPrice);
@@ -1201,7 +1305,6 @@
                                         });
                                     }
 
-                                    // New format calculation (Modular Groups)
                                     if(item.modularChoices && catalogProduct.optionGroups) {
                                         item.modularChoices.forEach(choice => {
                                             const group = catalogProduct.optionGroups.find(g => g.id === choice.groupId);
@@ -1265,7 +1368,7 @@
             } catch (error) { console.error("Dashboard Error:", error); }
         }
 
-        // ---------------- ADMIN SETTLES THE DRIVER (FIXED LOOPHOLE) ----------------
+        // ---------------- ADMIN SETTLES THE DRIVER ----------------
         window.settleDriver = async (email) => {
             if(!confirm(`Did you collect all the cash from ${email}?`)) return;
             try {
@@ -1361,10 +1464,7 @@
             sortedOrders.forEach(o => {
                 let orderDate = "";
                 if (o.timestamp) { const parsed = new Date(o.timestamp); if (!isNaN(parsed.getTime())) orderDate = parsed.toLocaleString('en-US'); }
-                
-                // Sanitize fields to prevent comma breaks in CSV
                 const sanitize = (text) => `"${(text || '').toString().replace(/"/g, '""')}"`;
-                
                 const subtotal = safeNum(o.totalPrice) - safeNum(o.deliveryFee);
 
                 csv += `${o.id.substring(0,6).toUpperCase()},${sanitize(orderDate)},${o.status},${sanitize(o.customerName)},${sanitize(o.customerPhone)},${sanitize(o.neighborhood)},${o.totalItems || 0},${subtotal},${safeNum(o.deliveryFee)},${safeNum(o.totalPrice)}\n`;
@@ -1439,14 +1539,9 @@
                 const p = item.product || {};
                 let metaHtml = "";
                 
-                // Legacy support
                 if(item.variantName) metaHtml += `<div>- Size: ${item.variantName}</div>`;
                 if(item.extras && item.extras.length > 0) metaHtml += `<div>- + ${item.extras.join(', ')}</div>`;
-                if(item.sauces && item.sauces.length > 0) metaHtml += `<div>- Sauce: ${item.sauces.join(', ')}</div>`;
-                if(item.drinks && item.drinks.length > 0) metaHtml += `<div>- Drink: ${item.drinks.join(', ')}</div>`;
-                if(item.options && item.options.length > 0) metaHtml += `<div>- Opt: ${item.options.join(', ')}</div>`;
                 
-                // New Modular Options support
                 if(item.modularChoices && item.modularChoices.length > 0) {
                     item.modularChoices.forEach(choice => {
                         metaHtml += `<div>- ${choice.groupName}: ${choice.itemName}</div>`;
@@ -1537,14 +1632,9 @@
                 
                 let metaText = [];
                 
-                // Legacy
                 if(item.variantName) metaText.push(`<span style="color:var(--primary);">${item.variantName}</span>`);
                 if(item.extras && item.extras.length > 0) metaText.push(`+ ${item.extras.join(', ')}`);
-                if(item.sauces && item.sauces.length > 0) metaText.push(`Sauce: ${item.sauces.join(', ')}`);
-                if(item.drinks && item.drinks.length > 0) metaText.push(`<span style="color:var(--blue); font-weight:700;">Drink: ${item.drinks.join(', ')}</span>`);
-                if(item.options && item.options.length > 0) metaText.push(`<span style="color:var(--warning); font-weight:700;">Option: ${item.options.join(', ')}</span>`);
                 
-                // New Modular
                 if(item.modularChoices && item.modularChoices.length > 0) {
                     item.modularChoices.forEach(choice => {
                         metaText.push(`<span style="color:var(--primary); font-weight:700;">${choice.groupName}:</span> ${choice.itemName}`);
