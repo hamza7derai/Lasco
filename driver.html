@@ -123,11 +123,10 @@
         .items-card h3 { font-size: 15px; font-weight: 800; margin-bottom: 16px; }
         .item-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
         .item-row:last-child { border-bottom: none; padding-bottom: 0;}
-        .item-img { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-main); object-fit: cover; flex-shrink: 0;}
+        .item-img { width: 48px; height: 48px; border-radius: 12px; background: var(--bg-main); object-fit: cover; flex-shrink: 0; border: 1px solid var(--border);}
         .item-details { flex: 1; }
         .item-name { font-size: 14px; font-weight: 800; margin-bottom: 4px; }
-        .item-meta { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
-        .item-price { font-size: 13px; font-weight: 800; color: var(--primary); margin-top: 4px; }
+        .item-meta { font-size: 12px; color: var(--text-muted); line-height: 1.4; margin-top: 4px;}
         .item-qty-badge { background: var(--accent-light); color: var(--accent); font-size: 13px; font-weight: 800; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;}
 
         /* WALLET VIEW */
@@ -679,27 +678,37 @@
             else document.getElementById('det-action-grid').style.display = 'grid';
 
             document.getElementById('det-items-count').innerText = `Items (${o.totalItems || 0})`;
+            
+            // FULLY UPDATED MODULAR CART LIST FOR DRIVER
             document.getElementById('det-cart-list').innerHTML = (o.cart || []).map(item => {
-                const p = item.product || {};
+                const p = item.product || {}; 
                 const img = p.imageUrl && p.imageUrl !== "local_file_selected" ? `<img src="${p.imageUrl}" class="item-img">` : `<div class="item-img" style="display:flex;align-items:center;justify-content:center;font-size:10px;">No Img</div>`;
                 
-                // ADDED: Individual Item Price Calculation
-                const linePrice = item.unitPrice ? Number(item.unitPrice * item.qty).toFixed(2) : '0.00';
-
                 let metaText = [];
+                
+                // Legacy support
                 if(item.variantName) metaText.push(`Size: ${item.variantName}`);
                 if(item.extras && item.extras.length > 0) metaText.push(`+ ${item.extras.join(', ')}`);
                 if(item.sauces && item.sauces.length > 0) metaText.push(`Sauce: ${item.sauces.join(', ')}`);
                 if(item.drinks && item.drinks.length > 0) metaText.push(`<span style="color:var(--primary); font-weight:700;">Drink: ${item.drinks.join(', ')}</span>`);
+                
+                // NEW MODULAR CHOICES
+                if(item.modularChoices && item.modularChoices.length > 0) {
+                    item.modularChoices.forEach(choice => {
+                        metaText.push(`<span style="color:var(--primary); font-weight:700;">${choice.groupName}:</span> ${choice.itemName}`);
+                    });
+                }
+
                 if(item.note) metaText.push(`Note: <span style="color:var(--danger); font-weight:700;">${item.note}</span>`);
 
+                const metaHtml = metaText.length > 0 ? `<div class="item-meta" style="margin-top:4px;">${metaText.join('<br>')}</div>` : '';
+
                 return `
-                <div class="item-row">
+                <div class="item-row" style="align-items:center;">
                     ${img}
                     <div class="item-details">
                         <div class="item-name">${p.name || 'Item'}</div>
-                        <div class="item-meta">${metaText.join('<br>')}</div>
-                        <div class="item-price">${linePrice} DH</div>
+                        ${metaHtml}
                     </div>
                     <div class="item-qty-badge">x${item.qty}</div>
                 </div>`;
