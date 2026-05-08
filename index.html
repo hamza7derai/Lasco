@@ -57,7 +57,6 @@
         /* HEADER & LOGO */
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); z-index: 50; padding: 12px 0; }
         .brand-logo { display: flex; align-items: center; gap: 4px; }
-        .brand-text { font-size: 26px; font-weight: 800; color: var(--theme-color); letter-spacing: -1px; transition: color 0.3s ease;}
         
         /* LOCATION SELECTOR PILL */
         .location-pill { position: relative; background: var(--bg-main); border: 1px solid var(--border-dark); padding: 8px 12px; border-radius: 50px; display: flex; align-items: center; gap: 6px; box-shadow: var(--shadow-sm);}
@@ -84,7 +83,12 @@
         .main-cats::-webkit-scrollbar { display: none; }
         .mc-card { min-width: 85px; background: var(--surface); border: 1px solid var(--border-dark); border-radius: 16px; padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.02);}
         .mc-card:active { transform: scale(0.95); }
-        .mc-icon { font-size: 28px; line-height: 1; }
+        
+        /* --- NEW MAGIC EMOJI CSS --- */
+        .mc-icon { font-size: 32px; line-height: 1; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .mc-card:not(.active) .mc-icon { opacity: 0.5; filter: grayscale(100%); transform: scale(0.85); }
+        .mc-card.active .mc-icon { transform: scale(1.15); filter: drop-shadow(0 6px 8px rgba(255, 69, 0, 0.25)); }
+        
         .mc-text { font-size: 12px; font-weight: 700; color: var(--text-main); text-align: center; }
         .mc-card.active { border-color: var(--theme-color); background: var(--theme-light); }
         .mc-card.active .mc-text { color: var(--theme-color); }
@@ -258,9 +262,9 @@
         <div class="closed-banner" id="closedBanner">La boutique est actuellement fermée.</div>
 
         <header class="header">
-    <div class="brand-logo">
-        <img src="https://i.postimg.cc/tCS14jmV/file-000000007c5c720ab4e6e16943cc7514.png" alt="lasGo Logo" style="height: 28px; width: auto; object-fit: contain;">
-    </div>
+            <div class="brand-logo" style="display: flex; align-items: center; margin-left: -4px;">
+                <img src="https://i.postimg.cc/HWJW9ySr/file-000000007c5c720ab4e6e16943cc7514.png" alt="lasGo Logo" style="height: 46px; width: auto; object-fit: contain; mix-blend-mode: multiply;">
+            </div>
 
             <div class="location-pill">
                 <svg class="loc-icon" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
@@ -431,9 +435,19 @@
             selections: {} 
         };
 
+        // --- UPDATED MAGIC EMOJI DICTIONARY ---
         const categoryAssets = {
-            "Breakfast": "🥐", "Petit-déjeuner": "🥐", "Tacos": "🌮", "Fast Food": "🍔", "Burger": "🍔", "Pizza": "🍕", "Drinks": "🥤", "Boissons": "🥤", "Desserts": "🍰", "Sucré": "🍰", "Produce": "🥗", "Fruits & Légumes": "🍎", "Meat": "🥩", "Viande": "🥩", "Dairy": "🥛", "Laitiers": "🥛", "Bakery": "🥖", "Boulangerie": "🥖", "Cleaning": "🧼", "Épicerie": "🍝"
+            "Top ventes": "🔥",
+            "Breakfast": "🥐", "Petit-déjeuner": "🥐", "Croissants": "🥐", 
+            "Desserts": "🍰", "Sucré": "🍰", "Cakes": "🎂", 
+            "Traditional": "🫖", "Moroccan Sweets": "🍯",
+            "Drinks": "🧋", "Boissons": "🥤",
+            "Tacos": "🌮", "Fast Food": "🍔", "Burger": "🍔", "Pizza": "🍕", 
+            "Produce": "🥗", "Fruits & Légumes": "🍎", "Meat": "🥩", "Viande": "🥩", 
+            "Dairy": "🥛", "Laitiers": "🥛", "Bakery": "🥖", "Boulangerie": "🥖", 
+            "Cleaning": "🧼", "Épicerie": "🍝"
         };
+        
         function getIconForCat(name) {
             for(let key in categoryAssets) { if(name.toLowerCase().includes(key.toLowerCase())) return categoryAssets[key]; }
             return currentMode === 'Resto' ? "🍽️" : "🛒";
@@ -510,13 +524,11 @@
                 document.getElementById('toggleBg').style.transform = 'translateX(100%)';
                 root.style.setProperty('--theme-color', 'var(--grocery-color)');
                 root.style.setProperty('--theme-light', 'var(--grocery-light)');
-                document.getElementById('brandIconBox').innerText = '🛒';
             } else {
                 btnResto.classList.add('active');
                 document.getElementById('toggleBg').style.transform = 'translateX(0)';
                 root.style.setProperty('--theme-color', 'var(--resto-color)');
                 root.style.setProperty('--theme-light', 'var(--resto-light)');
-                document.getElementById('brandIconBox').innerText = '🔥';
             }
             renderUI();
         };
