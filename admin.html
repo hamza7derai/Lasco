@@ -31,6 +31,9 @@
         /* SECURITY: HIDE BODY UNTIL BOUNCER APPROVES */
         body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg-main); color: var(--text-main); padding-bottom: 90px; display: none; }
         
+        /* PREVENTS BACKGROUND SCROLL WHEN MODAL IS OPEN */
+        body.modal-open { overflow: hidden; }
+        
         .container { padding: 20px; max-width: 600px; margin: 0 auto; position: relative; min-height: 100vh;}
         svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
         button { font-family: inherit; cursor: pointer; outline: none; border: none; background: none; }
@@ -206,12 +209,6 @@
         .btn-add-group { width: 100%; padding: 16px; border: 2px dashed var(--border-dark); border-radius: 16px; color: var(--text-muted); font-weight: 800; margin: 20px 0; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;}
         .btn-add-group:active { transform: scale(0.98); background: var(--bg-main); }
         
-        /* TRAITS CHECKLIST CSS */
-        .trait-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        .trait-item { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); transition: 0.2s; }
-        .trait-item:hover { border-color: var(--primary); }
-        .trait-item input { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;}
-
         .toggle-card-config { background: var(--surface); border-radius: 16px; border: 1px solid var(--border); padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow-sm); }
         .config-panel { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border); animation: fadeIn 0.3s ease; }
         .list-row { display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-btn); margin-bottom: 8px; background: var(--bg-main);}
@@ -561,17 +558,12 @@
 
                 <div class="form-group">
                     <label>Traits (Labels)</label>
-                    <div class="trait-grid" id="traitGrid">
-                        <label class="trait-item"><input type="checkbox" class="trait-ch" value="Bio"> ♻️ Bio</label>
-                        <label class="trait-item"><input type="checkbox" class="trait-ch" value="Frais"> ❄️ Frais</label>
-                        <label class="trait-item"><input type="checkbox" class="trait-ch" value="Piquant"> 🌶️ Piquant</label>
-                        <label class="trait-item"><input type="checkbox" class="trait-ch" value="Veggie"> 🌿 Veggie</label>
-                        <label class="trait-item"><input type="checkbox" class="trait-ch" value="Healthy"> 🥗 Healthy</label>
-                        <label class="trait-item"><input type="checkbox" class="trait-ch" value="Sans Sucre"> 🚫 Sans Sucre</label>
-                        <label class="trait-item"><input type="checkbox" class="trait-ch" value="Fait Maison"> 🏠 Fait Maison</label>
-                        <label class="trait-item"><input type="checkbox" class="trait-ch" value="Riche en protéines"> 💪 Riche en protéines</label>
-                        <label class="trait-item"><input type="checkbox" class="trait-ch" value="Local"> 📍 Local</label>
+                    <div style="display:flex; gap:8px; margin-bottom:12px;">
+                        <input type="text" id="traitInput" class="form-control" placeholder="Ex: Frais, Sans Gluten, Epicé..." onkeypress="if(event.key==='Enter') { event.preventDefault(); addCustomTrait(); }">
+                        <div class="btn btn-outline" style="width:auto; padding:0 20px;" onclick="addCustomTrait()">Add</div>
                     </div>
+                    <div id="customTraitsContainer" style="display:flex; flex-wrap:wrap; gap:8px;">
+                        </div>
                 </div>
 
                 <div class="toggle-card-config">
@@ -862,6 +854,7 @@
 
         // ---------------- CATEGORY MANAGER LOGIC (NEW) ----------------
         window.openCatManager = () => {
+            document.body.classList.add('modal-open'); // Prevents background scroll
             renderCatManagerList();
             document.getElementById('catManagerOverlay').classList.add('active');
             document.getElementById('catManagerModal').classList.add('active');
@@ -876,16 +869,40 @@
                 html = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">No categories found for this mode.</div>`;
             } else {
                 activeCats.forEach(c => {
+                    let subsHtml = (c.subcategories || []).map((sub) => `
+                        <div style="display:inline-flex; align-items:center; gap:4px; background:var(--surface); border:1px solid var(--border); padding:4px 8px; border-radius:8px; font-size:11px; margin-top:6px; margin-right:4px;">
+                            ${sub} <span style="color:var(--danger); cursor:pointer; font-weight:800; padding: 0 4px;" onclick="deleteSubcatManager('${c.id}', '${sub.replace(/'/g, "\\'")}')">×</span>
+                        </div>
+                    `).join('');
+
                     html += `
-                    <div style="display:flex; gap:8px; align-items:center; background:var(--bg-main); padding:10px; border-radius:12px; border:1px solid var(--border);">
-                        <input type="text" id="catName_${c.id}" class="form-control" style="padding:8px; font-size:13px; font-weight:700;" value="${c.name}">
-                        <input type="number" id="catWeight_${c.id}" class="form-control" style="width:70px; padding:8px; font-size:13px; text-align:center;" placeholder="Wgt" value="${c.sortWeight || 0}">
-                        <button class="btn-action edit" onclick="saveCategoryChanges('${c.id}', '${c.name.replace(/'/g, "\\'")}')"><svg viewBox="0 0 24 24" style="width:16px;"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
-                        <button class="btn-action del" onclick="deleteCategoryDb('${c.id}')"><svg viewBox="0 0 24 24" style="width:16px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                    <div style="background:var(--bg-main); padding:10px; border-radius:12px; border:1px solid var(--border); margin-bottom: 8px;">
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="text" id="catName_${c.id}" class="form-control" style="padding:8px; font-size:13px; font-weight:700;" value="${c.name}">
+                            <input type="number" id="catWeight_${c.id}" class="form-control" style="width:70px; padding:8px; font-size:13px; text-align:center;" placeholder="Wgt" value="${c.sortWeight || 0}">
+                            <button class="btn-action edit" onclick="saveCategoryChanges('${c.id}', '${c.name.replace(/'/g, "\\'")}')"><svg viewBox="0 0 24 24" style="width:16px;"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                            <button class="btn-action del" onclick="deleteCategoryDb('${c.id}')"><svg viewBox="0 0 24 24" style="width:16px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                        </div>
+                        <div style="margin-top: 4px;">
+                            ${subsHtml}
+                        </div>
                     </div>`;
                 });
             }
             document.getElementById('catManagerList').innerHTML = html;
+        };
+
+        window.deleteSubcatManager = async (id, subName) => {
+            if(confirm(`Remove subcategory '${subName}'?`)) {
+                try {
+                    const cat = globalCategoriesData.find(c => c.id === id);
+                    if(cat) {
+                        const newSubs = cat.subcategories.filter(s => s !== subName);
+                        await updateDoc(doc(db, "categories", id), { subcategories: newSubs });
+                        renderCatManagerList();
+                    }
+                } catch(e) { console.error(e); }
+            }
         };
 
         window.saveCategoryChanges = async (id, oldName) => {
@@ -1079,6 +1096,7 @@
         };
 
         window.closeModals = () => { 
+            document.body.classList.remove('modal-open'); // Restore scroll
             document.getElementById('confirmOverlay').classList.remove('active'); 
             document.getElementById('addCatOverlay').classList.remove('active'); 
             document.getElementById('addCatModal').classList.remove('active'); 
@@ -1112,6 +1130,33 @@
                 closeModals();
             } catch (e) { console.error(e); showToast("Error connecting."); } finally { btn.innerText = 'Add'; btn.disabled = false; }
         });
+
+        // ---------------- CUSTOM TRAITS LOGIC ----------------
+        window.currentProductTraits = [];
+
+        window.addCustomTrait = () => {
+            const input = document.getElementById('traitInput');
+            const val = input.value.trim();
+            if(val && !window.currentProductTraits.includes(val)) {
+                window.currentProductTraits.push(val);
+                input.value = '';
+                renderCustomTraits();
+            }
+        };
+
+        window.removeCustomTrait = (trait) => {
+            window.currentProductTraits = window.currentProductTraits.filter(t => t !== trait);
+            renderCustomTraits();
+        };
+
+        window.renderCustomTraits = () => {
+            const container = document.getElementById('customTraitsContainer');
+            container.innerHTML = window.currentProductTraits.map(t => `
+                <div style="background:var(--bg-main); border:1px solid var(--border); padding:6px 12px; border-radius:50px; font-size:12px; font-weight:700; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+                    ${t} <span style="cursor:pointer; color:var(--danger); font-size:14px; line-height:1;" onclick="removeCustomTrait('${t}')">×</span>
+                </div>
+            `).join('');
+        };
 
         // ---------------- CATALOG LOGIC (WITH SEARCH & QUICK TOGGLE) ----------------
         window.setCatalogMode = (mode) => {
@@ -1752,7 +1797,9 @@
             selectProductType('Resto'); 
 
             document.getElementById('pBadge').value = 'Standard';
-            document.querySelectorAll('.trait-ch').forEach(ch => ch.checked = false);
+            
+            window.currentProductTraits = []; 
+            renderCustomTraits();
             
             document.getElementById('tglPromo').checked = false; document.getElementById('cfgPromo').style.display = 'none';
             
@@ -1783,9 +1830,9 @@
             document.getElementById('pCost').value = p.costPrice || '';
             
             document.getElementById('pBadge').value = p.badge || 'Standard';
-            document.querySelectorAll('.trait-ch').forEach(ch => {
-                ch.checked = p.traits && p.traits.includes(ch.value);
-            });
+            
+            window.currentProductTraits = p.traits ? JSON.parse(JSON.stringify(p.traits)) : []; 
+            renderCustomTraits();
 
             document.getElementById('tglPromo').checked = (p.promoPrice !== null && p.promoPrice !== undefined);
             document.getElementById('cfgPromo').style.display = document.getElementById('tglPromo').checked ? 'block' : 'none';
@@ -1831,7 +1878,7 @@
                 imageUrl: document.getElementById('pImg').value, 
                 badge: badgeType,
                 sortWeight: weight,
-                traits: Array.from(document.querySelectorAll('.trait-ch:checked')).map(c => c.value),
+                traits: window.currentProductTraits,
                 promoPrice: document.getElementById('tglPromo').checked ? (parseFloat(document.getElementById('vPromoPrice').value) || null) : null,
                 optionGroups: window.optionGroups,
                 isAvailable: document.getElementById('tglAvailable').checked,
