@@ -456,6 +456,7 @@
         let currentMode = 'Resto'; 
         let activeMainCategory = 'Top ventes'; 
         let activeSubCategory = 'All';
+        
         let isFirstDataLoad = true; 
         
         let cart = [];
@@ -577,6 +578,7 @@
         onSnapshot(collection(db, "products"), snap => {
             allProducts = snap.docs.map(d => ({id: d.id, ...d.data()})).filter(p => p.isAvailable !== false);
             
+            // LAZY LOADING FIX: Perfect fallback logic
             if (isFirstDataLoad && snap.metadata.fromCache && allProducts.length === 0) {
                 setTimeout(() => { if (isFirstDataLoad) { isFirstDataLoad = false; renderUI(); } }, 1500);
                 return;
@@ -690,7 +692,7 @@
             displayProducts.sort((a, b) => {
                 const wa = a.sortWeight || 0;
                 const wb = b.sortWeight || 0;
-                if (wb !== wa) return wb - wa;
+                if (weightB !== weightA) return weightB - weightA;
                 return (a.name || "").localeCompare(b.name || "");
             });
 
@@ -771,7 +773,7 @@
             subset.sort((a, b) => {
                 const wa = a.sortWeight || 0;
                 const wb = b.sortWeight || 0;
-                if (wb !== wa) return wb - wa;
+                if (weightB !== weightA) return weightB - weightA;
                 return (a.name || "").localeCompare(b.name || "");
             });
 
@@ -1161,15 +1163,16 @@
 
         const savedTab = localStorage.getItem('lasGoActiveTab') || 'Resto';
         setMode(savedTab);
+    </script>
 
-if ('serviceWorker' in navigator) {
+    <script>
+        if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').catch(err => {
-                    console.log("Service worker bypassed, app continues normally.");
+                navigator.serviceWorker.register('sw.js', { scope: '/' }).catch(err => {
+                    console.log("SW registration failed: ", err);
                 });
             });
-}
-        
+        }
     </script>
 </body>
 </html>
