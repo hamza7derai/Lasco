@@ -160,17 +160,6 @@
     </style>
 </head>
 <body>
-
-    <div class="overlay" id="shiftOverlay" style="background: rgba(15,23,42,0.9); z-index: 9999;">
-        <div class="modal" style="background: white; text-align: center; padding: 30px 20px; display: block;">
-            <div style="font-size: 40px; margin-bottom: 12px;">🛵</div>
-            <h3 style="font-size: 20px; font-weight: 800; color: var(--text-main); margin-bottom: 8px;">Prêt pour la livraison ?</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px;">Activez l'alarme pour recevoir les notifications sonores des nouvelles commandes.</p>
-            <button id="btnStartShift" style="width: 100%; background: var(--primary); color: white; border: none; padding: 16px; border-radius: 16px; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 8px 20px rgba(13,93,255,0.3);">
-                Démarrer le service
-            </button>
-        </div>
-    </div>
     
     <audio id="notificationSound" preload="auto">
         <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
@@ -184,10 +173,17 @@
                 </h1>
                 <p style="font-size: 13px; color: var(--text-muted); font-weight: 500; margin-top: 4px;">Manage your deliveries</p>
             </div>
-            <button class="btn-wallet" onclick="switchTab('wallet')">
-                <svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
-                Wallet
-            </button>
+            
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <button id="btnToggleAlarm" style="background: var(--danger-light); color: var(--danger); border: 1px solid #FECACA; border-radius: 12px; padding: 10px; display: flex; align-items: center; justify-content: center; transition: 0.3s; box-shadow: var(--shadow-sm);" onclick="toggleAlarm()">
+                    <svg id="iconAlarmOff" viewBox="0 0 24 24" style="width: 20px;"><path d="M13.73 21a2 2 0 0 1-3.46 0"></path><path d="M18.63 13A17.89 17.89 0 0 1 18 8"></path><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"></path><path d="M18 8a6 6 0 0 0-9.33-5"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                    <svg id="iconAlarmOn" viewBox="0 0 24 24" style="width: 20px; display: none;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                </button>
+                <button class="btn-wallet" onclick="switchTab('wallet')">
+                    <svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+                    Wallet
+                </button>
+            </div>
         </div>
 
         <div class="tabs-toggle">
@@ -326,34 +322,55 @@
         let currentDriver = null;
         
         let isInitialLoad = true;
-        let blockNotifications = true; // Block until shift starts!
+        let blockNotifications = true; // Block until driver taps the bell
         const safeNum = (val) => isNaN(parseFloat(val)) ? 0 : parseFloat(val);
 
         const formatPrice = (num) => { const p = Number(num); return p % 1 === 0 ? p.toString() : p.toFixed(2); };
 
-        // --- NEW: FORCED INTERACTION TO UNLOCK AUDIO & NOTIFICATIONS ---
-        document.getElementById('shiftOverlay').classList.add('active'); // Show on load
+        // --- NEW ALARM TOGGLE LOGIC ---
+        window.toggleAlarm = () => {
+            const btn = document.getElementById('btnToggleAlarm');
+            const iconOff = document.getElementById('iconAlarmOff');
+            const iconOn = document.getElementById('iconAlarmOn');
+            
+            if (blockNotifications) {
+                // TURN ON: Force audio unlock
+                const sound = document.getElementById("notificationSound");
+                if (sound) {
+                    sound.volume = 0; 
+                    sound.play().then(() => {
+                        sound.pause();
+                        sound.currentTime = 0;
+                        sound.volume = 1; 
+                    }).catch(e => console.log("Audio unlock failed:", e));
+                }
 
-        document.getElementById('btnStartShift').addEventListener('click', () => {
-            // 1. Force the audio to play a silent blank frame to unlock it in the browser
-            const sound = document.getElementById("notificationSound");
-            sound.volume = 0; // mute it for the fake play
-            sound.play().then(() => {
-                sound.pause();
-                sound.currentTime = 0;
-                sound.volume = 1; // turn volume back up for real orders
-            }).catch(e => console.log("Audio unlock failed:", e));
+                // Request native notification permissions
+                if ("Notification" in window && Notification.permission !== "granted") {
+                    Notification.requestPermission();
+                }
 
-            // 2. Request native notification permissions
-            if ("Notification" in window && Notification.permission !== "granted") {
-                Notification.requestPermission();
+                // Update UI to Green
+                blockNotifications = false;
+                btn.style.background = 'var(--accent-light)';
+                btn.style.color = 'var(--accent)';
+                btn.style.borderColor = '#BBF7D0';
+                iconOff.style.display = 'none';
+                iconOn.style.display = 'block';
+                
+                showToast("Alarme Activée 🔊");
+            } else {
+                // TURN OFF: Update UI to Red
+                blockNotifications = true;
+                btn.style.background = 'var(--danger-light)';
+                btn.style.color = 'var(--danger)';
+                btn.style.borderColor = '#FECACA';
+                iconOff.style.display = 'block';
+                iconOn.style.display = 'none';
+                
+                showToast("Alarme Désactivée 🔕");
             }
-
-            // 3. Hide the overlay and allow Firebase to ring
-            document.getElementById('shiftOverlay').classList.remove('active');
-            blockNotifications = false; 
-            showToast("Notifications activées !");
-        });
+        };
 
         onAuthStateChanged(auth, async user => {
             if (user) {
