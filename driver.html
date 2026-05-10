@@ -156,7 +156,6 @@
 
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px); background: var(--text-main); color: white; padding: 12px 24px; border-radius: 50px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; box-shadow: var(--shadow-sm); z-index: 1100; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         .toast.show { transform: translateX(-50%) translateY(0); }
-        .toast-alarm { background: var(--warning); color: white; font-weight: 800; box-shadow: 0 10px 40px rgba(234, 88, 12, 0.4); border: 2px solid white; }
     </style>
 </head>
 <body>
@@ -313,15 +312,10 @@
         let currentTab = 'available'; 
         let openedOrderId = null;
         let currentDriver = null;
-        
-        // Notification safety flags
         let isInitialLoad = true;
-        let blockNotifications = true; 
         const safeNum = (val) => isNaN(parseFloat(val)) ? 0 : parseFloat(val);
 
-        // Allow app to settle for 3 seconds before allowing "Ping!" sounds
-        setTimeout(() => { blockNotifications = false; }, 3000);
-
+        // SILENT AUDIO UNLOCKER FOR MOBILE BROWSERS
         function unlockAudio() {
             const sound = document.getElementById("notificationSound");
             if(sound) {
@@ -336,6 +330,7 @@
         document.addEventListener('click', unlockAudio);
         document.addEventListener('touchstart', unlockAudio);
 
+        // --- THE BOUNCER & NOTIFICATION SETUP ---
         onAuthStateChanged(auth, async user => {
             if (user) {
                 currentDriver = user;
@@ -350,6 +345,12 @@
                     lastActive: new Date().toISOString()
                 }, { merge: true });
 
+                if ("Notification" in window) {
+                    if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                        Notification.requestPermission();
+                    }
+                }
+
                 const savedTab = localStorage.getItem('lasGoDriverTab') || 'dashboard';
                 switchTab(savedTab === 'login' ? 'dashboard' : savedTab);
             } else {
@@ -358,26 +359,16 @@
             }
         });
 
-        // --- NEW ALARM NOTIFICATION ENGINE ---
-        function playNotification(area) {
-            if(blockNotifications) return;
-
-            // 1. Play Sound
+        function playNotification(orderId, area) {
             const sound = document.getElementById("notificationSound");
-            if (sound) { sound.play().catch(e => console.log("Audio play blocked until interaction.")); }
+            if (sound) { sound.play().catch(e => console.log("Audio play blocked. Tap screen to unlock.")); }
             
-            // 2. Vibrate Phone
-            if (navigator.vibrate) { navigator.vibrate([200, 100, 200]); }
-
-            // 3. Show Bright Visual Toast
-            const t = document.getElementById('toastBox'); 
-            document.getElementById('toastMsg').innerText = `🚨 Nouvelle Commande : ${area || 'Disponible'} !`; 
-            t.classList.add('show');
-            t.classList.add('toast-alarm'); // Make it orange
-            setTimeout(() => { 
-                t.classList.remove('show'); 
-                t.classList.remove('toast-alarm'); 
-            }, 6000);
+            if ("Notification" in window && Notification.permission === "granted") {
+                new Notification("New Delivery Available! 🛵", {
+                    body: `A new unassigned order in ${area || 'your area'} is ready to be claimed.`,
+                    icon: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png" 
+                });
+            }
         }
 
         window.logoutDriver = async () => {
@@ -388,20 +379,21 @@
             } catch(e) { console.error(e); }
         };
 
+        // --- LISTENERS ---
         onSnapshot(collection(db, "products"), snap => {
             allProducts = snap.docs.map(d => ({id: d.id, ...d.data()}));
             if(document.getElementById('view-wallet').classList.contains('active') && currentDriver) renderWallet();
         });
 
         onSnapshot(collection(db, "orders"), snap => {
-            if(currentDriver && !isInitialLoad && !blockNotifications) {
+            if(currentDriver && !isInitialLoad) {
                 snap.docChanges().forEach(change => {
                     if (change.type === "added") {
                         const newOrder = change.doc.data();
                         
-                        // Fire Notification Engine ONLY if order is Pending with no driver
+                        // Fire notification if it's a brand new order with NO driver assigned
                         if (newOrder.status === 'Pending' && (!newOrder.driverEmail || newOrder.driverEmail === "")) {
-                            playNotification(newOrder.neighborhood);
+                            playNotification(change.doc.id, newOrder.neighborhood);
                         }
                     }
                 });
@@ -459,6 +451,7 @@
         function renderDashboard() {
             if(!currentDriver) return;
 
+            // NEW OPEN POOL LOGIC
             const unassignedOrders = allOrders.filter(o => o.status === 'Pending' && (!o.driverEmail || o.driverEmail === ""));
             const myOrders = allOrders.filter(o => o.driverEmail === currentDriver.email);
             
@@ -484,7 +477,7 @@
                 container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-illustration">
-                        <svg viewBox="0 0 24 24" style="width:60px; height:60px; stroke-width:1.5;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                        <svg viewBox="0 0 24 24" style="width:60px; height:60px; stroke-width:1.5;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                     </div>
                     <h3>No orders available</h3>
                     <p>New deliveries will appear here.</p>
@@ -687,17 +680,20 @@
 
             document.getElementById('det-items-count').innerText = `Items (${o.totalItems || 0})`;
             
+            // FULLY UPDATED MODULAR CART LIST FOR DRIVER
             document.getElementById('det-cart-list').innerHTML = (o.cart || []).map(item => {
                 const p = item.product || {}; 
                 const img = p.imageUrl && p.imageUrl !== "local_file_selected" ? `<img src="${p.imageUrl}" class="item-img">` : `<div class="item-img" style="display:flex;align-items:center;justify-content:center;font-size:10px;">No Img</div>`;
                 
                 let metaText = [];
                 
+                // Legacy support
                 if(item.variantName) metaText.push(`Size: ${item.variantName}`);
                 if(item.extras && item.extras.length > 0) metaText.push(`+ ${item.extras.join(', ')}`);
                 if(item.sauces && item.sauces.length > 0) metaText.push(`Sauce: ${item.sauces.join(', ')}`);
                 if(item.drinks && item.drinks.length > 0) metaText.push(`<span style="color:var(--primary); font-weight:700;">Drink: ${item.drinks.join(', ')}</span>`);
                 
+                // NEW MODULAR CHOICES
                 if(item.modularChoices && item.modularChoices.length > 0) {
                     item.modularChoices.forEach(choice => {
                         metaText.push(`<span style="color:var(--primary); font-weight:700;">${choice.groupName}:</span> ${choice.itemName}`);
@@ -775,6 +771,7 @@
             }
         };
 
+        // NEW: Unclaim Order Function
         window.unclaimOrder = async (orderId) => {
             try {
                 await updateDoc(doc(db, "orders", orderId), { 
@@ -802,15 +799,6 @@
             document.getElementById('toastMsg').innerText = msg; 
             t.classList.add('show'); 
             setTimeout(() => t.classList.remove('show'), 3000); 
-        }
-        
-        // PWA Install Script for Driver
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').catch(err => {
-                    console.log("Service worker not active, but app will still run.");
-                });
-            });
         }
     </script>
 </body>
