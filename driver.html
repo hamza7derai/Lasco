@@ -334,12 +334,12 @@
         let currentDriver = null;
         
         let isInitialLoad = true;
-        let blockNotifications = true; 
+        let blockNotifications = true; // Block until driver taps the bell
         const safeNum = (val) => isNaN(parseFloat(val)) ? 0 : parseFloat(val);
 
         const formatPrice = (num) => { const p = Number(num); return p % 1 === 0 ? p.toString() : p.toFixed(2); };
 
-        // --- NEW CHECKBOX TOGGLE LOGIC ---
+        // --- CHECKBOX TOGGLE LOGIC ---
         window.toggleItemCheck = (element) => {
             element.classList.toggle('checked');
             checkDeliveryReadiness();
@@ -370,6 +370,7 @@
             const iconOn = document.getElementById('iconAlarmOn');
             
             if (blockNotifications) {
+                // TURN ON: Force audio unlock
                 const sound = document.getElementById("notificationSound");
                 if (sound) {
                     sound.volume = 0; 
@@ -380,10 +381,12 @@
                     }).catch(e => console.log("Audio unlock failed:", e));
                 }
 
+                // Request native notification permissions
                 if ("Notification" in window && Notification.permission !== "granted") {
                     Notification.requestPermission();
                 }
 
+                // Update UI to Green
                 blockNotifications = false;
                 btn.style.background = 'var(--accent-light)';
                 btn.style.color = 'var(--accent)';
@@ -393,6 +396,7 @@
                 
                 showToast("Alarme Activée 🔊");
             } else {
+                // TURN OFF: Update UI to Red
                 blockNotifications = true;
                 btn.style.background = 'var(--danger-light)';
                 btn.style.color = 'var(--danger)';
@@ -430,11 +434,14 @@
         function playNotification(area) {
             if(blockNotifications) return;
 
+            // 1. Play Sound
             const sound = document.getElementById("notificationSound");
             if (sound) { sound.play().catch(e => console.log("Audio play blocked", e)); }
             
+            // 2. Vibrate Phone
             if (navigator.vibrate) { navigator.vibrate([200, 100, 200, 100, 400]); }
 
+            // 3. Show Native Push Notification
             if ("Notification" in window && Notification.permission === "granted") {
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.ready.then(registration => {
@@ -447,6 +454,7 @@
                 }
             }
 
+            // 4. Show App Toast
             const t = document.getElementById('toastBox'); 
             document.getElementById('toastMsg').innerText = `🚨 Commande : ${area || 'Disponible'} !`; 
             t.classList.add('show');
@@ -476,6 +484,7 @@
                     if (change.type === "added") {
                         const newOrder = change.doc.data();
                         
+                        // Fire Notification Engine ONLY if order is Pending with no driver
                         if (newOrder.status === 'Pending' && (!newOrder.driverEmail || newOrder.driverEmail === "")) {
                             playNotification(newOrder.neighborhood);
                         }
@@ -496,6 +505,7 @@
                 }
             }
             
+            // Allow a short delay on the first load so it doesn't ring for old orders
             setTimeout(() => { isInitialLoad = false; }, 2000);
         });
 
@@ -558,6 +568,7 @@
             const displayList = currentTab === 'available' ? available : active;
 
             if(displayList.length === 0) {
+                // UPDATED PREMIUM EMPTY STATE ICON
                 container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-illustration">
@@ -647,7 +658,7 @@
             }
         }
 
-        // --- WALLET LOGIC ---
+        // --- WALLET LOGIC (UNCHANGED, PERFECT MATH) ---
         function renderWallet() {
             if(!currentDriver) return;
             const myOrders = allOrders.filter(o => o.driverEmail === currentDriver.email);
@@ -665,12 +676,14 @@
                         const dbProduct = allProducts.find(x => x.id === item.product.id);
                         let unitCost = dbProduct ? safeNum(dbProduct.costPrice) : 0;
                         
+                        // LEGACY SIZES
                         if(dbProduct && dbProduct.sizes && item.variantName) {
                             const sizeData = dbProduct.sizes.find(s => s.name === item.variantName);
                             if(sizeData && sizeData.costPrice) unitCost = safeNum(sizeData.costPrice);
                         }
                         orderCost += (unitCost * item.qty);
 
+                        // LEGACY EXTRAS
                         if(item.extras && item.extras.length > 0 && dbProduct && dbProduct.extras) {
                             item.extras.forEach(extName => {
                                 const extra = dbProduct.extras.find(e => e.name === extName);
@@ -678,6 +691,7 @@
                             });
                         }
                         
+                        // MODULAR CHOICES COST TRACKING
                         if(item.modularChoices && item.modularChoices.length > 0 && dbProduct && dbProduct.optionGroups) {
                             item.modularChoices.forEach(choice => {
                                 const group = dbProduct.optionGroups.find(g => g.id === choice.groupId || g.name === choice.groupName);
@@ -734,7 +748,7 @@
             } catch(e) { console.error(e); alert("Error settling wallet."); } finally { btn.innerHTML = originalText; }
         }
 
-        // --- ORDER DETAILS (WITH CATEGORY SPLIT & CHECKBOX UI) ---
+        // --- ORDER DETAILS (UPGRADED CATEGORY SPLITTING) ---
         window.openOrder = (id) => {
             const o = allOrders.find(x => x.id === id); if(!o) return;
             openedOrderId = id;
@@ -777,18 +791,32 @@
 
             document.getElementById('det-items-count').innerText = `Items (${o.totalItems || 0})`;
             
-            // --- SPLITTING ITEMS INTO CATEGORIES ---
             const restoItems = [];
             const groceryItems = [];
 
-            // GROCERY CATEGORY KEYWORDS
-            const groceryCategories = ["grocery", "epicerie", "épicerie", "market", "snacks", "drinks", "boissons", "supermarket"];
+            // Robust keyword checking to catch ANY grocery item format
+            const groceryKeywords = ['grocery', 'epicerie', 'épicerie', 'market', 'supermarket', 'snacks', 'lait', 'oeufs', 'chips', 'biscuits', 'boissons', 'pack'];
 
             (o.cart || []).forEach(item => {
                 const p = item.product || {}; 
                 
+                // CRITICAL FIX: Look up the original product from Firebase to guarantee we check the real category
                 const dbProduct = allProducts.find(x => x.id === p.id) || p;
-                const pCat = (dbProduct.category || p.category || dbProduct.type || '').toLowerCase();
+                
+                // Combine every possible property where the category could be hiding
+                const catStr = String(dbProduct.category || p.category || '').toLowerCase();
+                const typeStr = String(dbProduct.type || p.type || dbProduct.storeType || '').toLowerCase();
+                
+                let isGrocery = false;
+                
+                // Condition 1: If the type explicitly says grocery
+                if (typeStr === 'grocery' || typeStr === 'epicerie' || typeStr === 'market') {
+                    isGrocery = true;
+                } 
+                // Condition 2: If the category name contains any of our grocery keywords
+                else if (groceryKeywords.some(kw => catStr.includes(kw))) {
+                    isGrocery = true;
+                }
 
                 const img = p.imageUrl && p.imageUrl !== "local_file_selected" ? `<img src="${p.imageUrl}" class="item-img">` : `<div class="item-img" style="display:flex;align-items:center;justify-content:center;font-size:10px;">No Img</div>`;
                 
@@ -825,8 +853,7 @@
                     </div>
                 </div>`;
 
-                const isGrocery = groceryCategories.some(keyword => pCat.includes(keyword));
-
+                // Push to the correct array
                 if (isGrocery) {
                     groceryItems.push(itemHtml);
                 } else {
@@ -854,6 +881,7 @@
                     </button>`;
             } else if (o.driverEmail === currentDriver.email) {
                 if(o.status === 'Preparing') {
+                    // Start delivery button is locked until checkboxes are ticked
                     actionContainer.innerHTML = `
                         <button id="btnStartDelivery" style="width: 100%; opacity: 0.5; pointer-events: none; background: var(--primary); color: white; border: none; padding: 18px; border-radius: 16px; font-weight: 800; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 8px 20px rgba(13, 93, 255, 0.3); transition: 0.2s; cursor: pointer; margin-bottom: 12px;" onclick="updateOrderStatus('${o.id}', 'Out for Delivery')">
                             <svg viewBox="0 0 24 24" style="width:20px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
@@ -864,7 +892,7 @@
                             Release back to Pool
                         </button>
                         `;
-                    setTimeout(() => checkDeliveryReadiness(), 50);
+                    setTimeout(() => checkDeliveryReadiness(), 50); // initial check in case order is somehow empty
                 } else if (o.status === 'Out for Delivery') {
                     actionContainer.innerHTML = `
                         <button style="width: 100%; background: var(--accent); color: white; border: none; border-radius: 16px; padding: 18px; font-weight: 800; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 8px 20px rgba(22, 163, 74, 0.3); margin-bottom: 12px; transition: 0.2s; cursor: pointer;" onclick="updateOrderStatus('${o.id}', 'Delivered')">
@@ -930,6 +958,7 @@
             setTimeout(() => t.classList.remove('show'), 3000); 
         }
         
+        // PWA Install Script for Driver
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').catch(err => {
